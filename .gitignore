@@ -46,3 +46,5 @@ temp/
 
 # Test data
 test_benign_data/
+test_malware_data/
+test_malware_report/

@@ -107,26 +107,74 @@ def get_elf_binary_info(binary_path):
             # Parse header based on 32-bit or 64-bit
             if ei_class == 1:  # 32-bit ELF
                 # e_phoff at offset 28 (4 bytes)
+                # e_shoff at offset 32 (4 bytes)
                 # e_phentsize at offset 42 (2 bytes)
                 # e_phnum at offset 44 (2 bytes)
                 # e_shnum at offset 48 (2 bytes)
+                # e_shstrndx at offset 50 (2 bytes)
                 e_phoff = struct.unpack(f'{endian_char}I', header[28:32])[0]
+                e_shoff = struct.unpack(f'{endian_char}I', header[32:36])[0]
                 e_phentsize = struct.unpack(f'{endian_char}H', header[42:44])[0]
                 e_phnum = struct.unpack(f'{endian_char}H', header[44:46])[0]
                 e_shnum = struct.unpack(f'{endian_char}H', header[48:50])[0]
+                e_shstrndx = struct.unpack(f'{endian_char}H', header[50:52])[0]
+                sh_size = 40  # Section header size for 32-bit
 
             elif ei_class == 2:  # 64-bit ELF
                 # e_phoff at offset 32 (8 bytes)
+                # e_shoff at offset 40 (8 bytes)
                 # e_phentsize at offset 54 (2 bytes)
                 # e_phnum at offset 56 (2 bytes)
                 # e_shnum at offset 60 (2 bytes)
+                # e_shstrndx at offset 62 (2 bytes)
                 e_phoff = struct.unpack(f'{endian_char}Q', header[32:40])[0]
+                e_shoff = struct.unpack(f'{endian_char}Q', header[40:48])[0]
                 e_phentsize = struct.unpack(f'{endian_char}H', header[54:56])[0]
                 e_phnum = struct.unpack(f'{endian_char}H', header[56:58])[0]
                 e_shnum = struct.unpack(f'{endian_char}H', header[60:62])[0]
+                e_shstrndx = struct.unpack(f'{endian_char}H', header[62:64])[0]
+                sh_size = 64  # Section header size for 64-bit
 
-            # Check if has section headers
-            info['has_section_name'] = e_shnum > 0
+            # Check if has section name string table
+            # Basic checks first
+            if e_shnum == 0 or e_shstrndx == 0 or e_shstrndx >= e_shnum:
+                info['has_section_name'] = False
+            else:
+                # Advanced check: verify the section header string table is valid
+                try:
+                    # Calculate offset of the shstrtab section header
+                    shstrtab_header_offset = e_shoff + (e_shstrndx * sh_size)
+                    f.seek(shstrtab_header_offset)
+                    shstrtab_header = f.read(sh_size)
+
+                    if len(shstrtab_header) == sh_size:
+                        # Parse section header to get sh_offset and sh_size
+                        if ei_class == 1:  # 32-bit
+                            sh_offset = struct.unpack(f'{endian_char}I', shstrtab_header[16:20])[0]
+                            sh_size_val = struct.unpack(f'{endian_char}I', shstrtab_header[20:24])[0]
+                        else:  # 64-bit
+                            sh_offset = struct.unpack(f'{endian_char}Q', shstrtab_header[24:32])[0]
+                            sh_size_val = struct.unpack(f'{endian_char}Q', shstrtab_header[32:40])[0]
+
+                        # Check if offset and size are reasonable
+                        if sh_offset > 0 and sh_size_val > 0:
+                            # Get file size
+                            current_pos = f.tell()
+                            file_size = f.seek(0, 2)
+                            f.seek(current_pos)
+
+                            # Verify string table is within file bounds
+                            if sh_offset < file_size and sh_offset + sh_size_val <= file_size:
+                                info['has_section_name'] = True
+                            else:
+                                info['has_section_name'] = False
+                        else:
+                            info['has_section_name'] = False
+                    else:
+                        info['has_section_name'] = False
+                except Exception:
+                    # If any error occurs during validation, assume no valid section names
+                    info['has_section_name'] = False
 
             # Count PT_LOAD segments
             f.seek(e_phoff)
