@@ -67,7 +67,7 @@ pyelflabeler --help
 
 2. 複製並安裝：
    ```bash
-   git clone https://github.com/louiskyee/pyelflabeler.git
+   git clone https://github.com/bolin8017/pyelflabeler.git
    cd pyelflabeler
    uv sync
    ```
@@ -83,7 +83,7 @@ pyelflabeler --help
 
 1. 複製此儲存庫：
    ```bash
-   git clone https://github.com/louiskyee/pyelflabeler.git
+   git clone https://github.com/bolin8017/pyelflabeler.git
    cd pyelflabeler
    ```
 
@@ -286,9 +286,9 @@ class CustomAnalyzer(BaseAnalyzer):
 ```bibtex
 @software{pyelflabeler,
   title={PyELFLabeler: ELF 二進制數據集分析工具},
-  author={louiskyee},
-  year={2024},
-  url={https://github.com/louiskyee/pyelflabeler}
+  author={bolin8017},
+  year={2025},
+  url={https://github.com/bolin8017/pyelflabeler}
 }
 ```
 
@@ -296,7 +296,6 @@ class CustomAnalyzer(BaseAnalyzer):
 
 - [AVClass](https://github.com/malicialab/avclass) - 惡意軟體家族分類
 - [Detect It Easy](https://github.com/horsicq/Detect-It-Easy) - 加殼器偵測
-- [tqdm](https://github.com/tqdm/tqdm) - 進度條
 
 ## 聯絡方式
 

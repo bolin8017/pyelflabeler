@@ -1,11 +1,11 @@
 [project]
 name = "pyelflabeler"
-version = "0.3.1"
+version = "0.3.2"
 description = "ELF Binary Analysis Tool - Label malware or benignware datasets"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "louiskyee", email = "bolin8017@gmail.com" }
+    { name = "bolin8017", email = "bolin8017@gmail.com" }
 ]
 keywords = ["malware", "elf", "binary-analysis", "security", "dataset", "labeling"]
 classifiers = [
@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/louiskyee/pyelflabeler"
-Repository = "https://github.com/louiskyee/pyelflabeler"
-Issues = "https://github.com/louiskyee/pyelflabeler/issues"
+Homepage = "https://github.com/bolin8017/pyelflabeler"
+Repository = "https://github.com/bolin8017/pyelflabeler"
+Issues = "https://github.com/bolin8017/pyelflabeler/issues"
 
 [project.scripts]
 pyelflabeler = "src.main:main"

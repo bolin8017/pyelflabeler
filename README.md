@@ -67,7 +67,7 @@ pyelflabeler --help
 
 2. Clone and install:
    ```bash
-   git clone https://github.com/louiskyee/pyelflabeler.git
+   git clone https://github.com/bolin8017/pyelflabeler.git
    cd pyelflabeler
    uv sync
    ```
@@ -83,7 +83,7 @@ pyelflabeler --help
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/louiskyee/pyelflabeler.git
+   git clone https://github.com/bolin8017/pyelflabeler.git
    cd pyelflabeler
    ```
 
@@ -286,9 +286,9 @@ If you use this tool in your research, please cite:
 ```bibtex
 @software{pyelflabeler,
   title={PyELFLabeler: A Tool for ELF Binary Dataset Analysis},
-  author={louiskyee},
-  year={2024},
-  url={https://github.com/louiskyee/pyelflabeler}
+  author={bolin8017},
+  year={2025},
+  url={https://github.com/bolin8017/pyelflabeler}
 }
 ```
 
@@ -296,7 +296,6 @@ If you use this tool in your research, please cite:
 
 - [AVClass](https://github.com/malicialab/avclass) - Malware family classification
 - [Detect It Easy](https://github.com/horsicq/Detect-It-Easy) - Packer detection
-- [tqdm](https://github.com/tqdm/tqdm) - Progress bars
 
 ## Contact
 
