@@ -87,7 +87,7 @@ def main():
         print("Error: --input_folder (-i) is required for malware mode")
         sys.exit(1)
 
-    # Create config
+    # Create config and analyzer
     try:
         config = Config(
             mode=args.mode,
@@ -95,6 +95,7 @@ def main():
             binary_dir=args.binary_folder,
             output_path=args.output
         )
+        analyzer = create_analyzer(config)
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -114,9 +115,6 @@ def main():
     print(f"Error log:      {log_file}")
     print("="*80)
     print()
-
-    # Create analyzer using factory pattern
-    analyzer = create_analyzer(config)
 
     # Run analysis
     analyzer.run()

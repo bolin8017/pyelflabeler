@@ -36,16 +36,29 @@ class BaseAnalyzer(ABC):
         """
         pass
 
+    @staticmethod
     @abstractmethod
-    def process_single_file(self, file_path):
+    def process_single_file(file_path, *args):
         """
         Process a single file and extract information.
-        This method must be implemented by subclasses.
+        Must be implemented as a @staticmethod by subclasses for multiprocessing compatibility.
+        Additional arguments can be provided via _build_task_args().
 
         :param file_path: Path to the file to process.
+        :param args: Additional arguments provided by _build_task_args().
         :return: Dictionary containing extracted information, or None if processing failed.
         """
         pass
+
+    def _build_task_args(self, file_path):
+        """
+        Build arguments for process_single_file.
+        Override in subclasses to provide additional arguments.
+
+        :param file_path: Path to the file to process.
+        :return: Tuple of arguments.
+        """
+        return (file_path,)
 
     def analyze_files(self):
         """
@@ -54,38 +67,20 @@ class BaseAnalyzer(ABC):
         """
         start_time = time.time()
 
-        # Create a list to store extracted information
         results = []
 
-        # Set the maximum number of processes, can be adjusted based on CPU cores
         max_workers = os.cpu_count()
         print(f"Using {max_workers} processes for parallel processing")
 
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all files for processing using the class's static method
-            # This avoids serializing the entire self object for each task
             static_method = self.__class__.process_single_file
 
-            # Check if process_single_file needs binary_base_path (for MalwareAnalyzer)
-            # We can check the method signature
-            import inspect
-            sig = inspect.signature(static_method)
-            needs_binary_path = 'binary_base_path' in sig.parameters
+            futures = [executor.submit(static_method, *self._build_task_args(fp))
+                       for fp in self.file_list]
 
-            if needs_binary_path:
-                # For MalwareAnalyzer: pass binary_base_path
-                futures = [executor.submit(static_method, file_path, self.binary_base_path)
-                          for file_path in self.file_list]
-            else:
-                # For BenignwareAnalyzer: only pass file_path
-                futures = [executor.submit(static_method, file_path)
-                          for file_path in self.file_list]
-
-            # Collect results with progress bar
             for future in tqdm(as_completed(futures), total=len(futures),
                              desc="Analyzing files", unit="file"):
                 result = future.result()
-                # Skip None results (failed processing or missing files)
                 if result is not None:
                     results.append(result)
 

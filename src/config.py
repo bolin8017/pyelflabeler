@@ -37,13 +37,8 @@ class Config:
 
         :return: Default output path based on mode.
         """
-        if self.mode == 'malware':
-            if self.input_dir:
-                return os.path.join(self.input_dir, "malware_info.csv")
-            else:
-                return "malware_info.csv"
-        else:  # benignware
-            if self.input_dir:
-                return os.path.join(self.input_dir, "benignware_info.csv")
-            else:
-                return "benignware_info.csv"
+        filename = f"{self.mode}_info.csv"
+        base_dir = self.input_dir if self.mode == 'malware' and self.input_dir else None
+        if base_dir:
+            return os.path.join(base_dir, filename)
+        return filename

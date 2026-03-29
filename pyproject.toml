@@ -50,6 +50,7 @@ packages = ["src"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
+    "tests/",
     "test_benign_data/",
     ".claude/",
     ".git/",
@@ -57,3 +58,9 @@ exclude = [
     "*.pyc",
     "__pycache__/",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]
