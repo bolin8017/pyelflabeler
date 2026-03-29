@@ -138,9 +138,11 @@ def get_family_using_avclass(json_file, one_line_data):
         tmp_file_path = tmp_file.name
         tmp_file.write(one_line_data)
 
-    command = f"avclass -f {tmp_file_path}"
     try:
-        result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            ['avclass', '-f', tmp_file_path],
+            check=True, text=True, capture_output=True, timeout=30
+        )
         if result.returncode == 0:
             # Extract family name
             output_parts = result.stdout.strip().split()

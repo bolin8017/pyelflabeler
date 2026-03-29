@@ -3,7 +3,6 @@ Benignware analyzer - processes binary files only.
 """
 
 import os
-import sys
 import logging
 from tqdm import tqdm
 
@@ -25,10 +24,8 @@ class BenignwareAnalyzer(BaseAnalyzer):
         """
         super().__init__(config)
 
-        # Validate benignware mode requirements
         if not os.path.isdir(self.binary_base_path):
-            print(f"Error: Binary directory does not exist: {self.binary_base_path}")
-            sys.exit(1)
+            raise ValueError(f"Binary directory does not exist: {self.binary_base_path}")
 
     def collect_files(self):
         """
@@ -38,24 +35,23 @@ class BenignwareAnalyzer(BaseAnalyzer):
         print(f"Searching for all binary files in directory: {self.binary_base_path}...")
 
         # Traverse the directory structure: base_dir/XX/hash
-        for subdir in tqdm(os.listdir(self.binary_base_path),
-                          desc="Scanning subdirectories", unit="dir"):
-            subdir_path = os.path.join(self.binary_base_path, subdir)
+        try:
+            subdirs = list(os.scandir(self.binary_base_path))
+        except OSError as e:
+            logging.warning(f"Error reading directory {self.binary_base_path}: {e}")
+            return
 
+        for entry in tqdm(subdirs, desc="Scanning subdirectories", unit="dir"):
             # Skip if not a directory or not a 2-character hex directory
-            if not os.path.isdir(subdir_path) or len(subdir) != 2:
+            if not entry.is_dir() or len(entry.name) != 2:
                 continue
 
-            # List all files in the subdirectory
             try:
-                for filename in os.listdir(subdir_path):
-                    file_path = os.path.join(subdir_path, filename)
-
-                    # Only process regular files (not directories)
-                    if os.path.isfile(file_path):
-                        self.file_list.append(file_path)
-            except Exception as e:
-                logging.warning(f"Error reading directory {subdir_path}: {e}")
+                for file_entry in os.scandir(entry.path):
+                    if file_entry.is_file():
+                        self.file_list.append(file_entry.path)
+            except OSError as e:
+                logging.warning(f"Error reading directory {entry.path}: {e}")
                 continue
 
         print(f"Found {len(self.file_list)} binary files")
@@ -106,25 +102,23 @@ class BenignwareAnalyzer(BaseAnalyzer):
         if not sha256:
             return result
 
-        # Get ELF information from binary file
-        if os.path.exists(binary_path):
-            # Use pyelftools to get CPU, endianness, file type, and stripped status
-            elf_info = get_elf_info_with_pyelftools(binary_path)
-            result['CPU'] = elf_info['cpu']
-            result['endianness'] = elf_info['endianness']
-            result['file_type'] = elf_info['file_type']
-            result['is_stripped'] = elf_info['is_stripped']
+        # Use pyelftools to get CPU, endianness, file type, and stripped status
+        elf_info = get_elf_info_with_pyelftools(binary_path)
+        result['CPU'] = elf_info['cpu']
+        result['endianness'] = elf_info['endianness']
+        result['file_type'] = elf_info['file_type']
+        result['is_stripped'] = elf_info['is_stripped']
 
-            # Run diec analysis on the binary file
-            diec_is_packed, diec_packer_info, diec_packing_method = run_diec_analysis(binary_path)
-            result['diec_is_packed'] = diec_is_packed
-            result['diec_packer_info'] = diec_packer_info
-            result['diec_packing_method'] = diec_packing_method
+        # Run diec analysis on the binary file
+        diec_is_packed, diec_packer_info, diec_packing_method = run_diec_analysis(binary_path)
+        result['diec_is_packed'] = diec_is_packed
+        result['diec_packer_info'] = diec_packer_info
+        result['diec_packing_method'] = diec_packing_method
 
-            # Read ELF binary once to get bits, load segments, and section headers
-            binary_info = get_elf_binary_info(binary_path)
-            result['bits'] = binary_info['bits']
-            result['load_segments'] = binary_info['load_segments']
-            result['has_section_name'] = binary_info['has_section_name']
+        # Read ELF binary once to get bits, load segments, and section headers
+        binary_info = get_elf_binary_info(binary_path)
+        result['bits'] = binary_info['bits']
+        result['load_segments'] = binary_info['load_segments']
+        result['has_section_name'] = binary_info['has_section_name']
 
         return result

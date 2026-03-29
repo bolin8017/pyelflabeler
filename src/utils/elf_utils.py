@@ -7,6 +7,24 @@ import logging
 from elftools.elf.elffile import ELFFile
 from elftools.elf.descriptions import describe_e_machine
 
+# ELF constants
+ELF_MAGIC = b'\x7fELF'
+ELFCLASS32 = 1
+ELFCLASS64 = 2
+PT_LOAD = 1
+
+# Section header entry sizes
+SH_ENTRY_SIZE_32 = 40
+SH_ENTRY_SIZE_64 = 64
+
+# ELF file type mapping
+_ELF_TYPE_MAP = {
+    'ET_EXEC': 'EXEC',
+    'ET_DYN': 'DYN',
+    'ET_REL': 'REL',
+    'ET_CORE': 'CORE',
+}
+
 
 def get_elf_info_with_pyelftools(binary_path):
     """
@@ -26,33 +44,17 @@ def get_elf_info_with_pyelftools(binary_path):
         with open(binary_path, 'rb') as f:
             elffile = ELFFile(f)
 
-            machine = elffile.header['e_machine']
-            info['cpu'] = describe_e_machine(machine)
+            info['cpu'] = describe_e_machine(elffile.header['e_machine'])
 
-            if elffile.little_endian:
-                info['endianness'] = "2's complement, little endian"
-            else:
-                info['endianness'] = "2's complement, big endian"
+            info['endianness'] = (
+                "2's complement, little endian" if elffile.little_endian
+                else "2's complement, big endian"
+            )
 
             e_type = elffile.header['e_type']
-            if e_type == 'ET_EXEC':
-                info['file_type'] = "EXEC"
-            elif e_type == 'ET_DYN':
-                info['file_type'] = "DYN"
-            elif e_type == 'ET_REL':
-                info['file_type'] = "REL"
-            elif e_type == 'ET_CORE':
-                info['file_type'] = "CORE"
-            else:
-                info['file_type'] = e_type
+            info['file_type'] = _ELF_TYPE_MAP.get(e_type, e_type)
 
-            has_symtab = False
-            for section in elffile.iter_sections():
-                if section.name == '.symtab':
-                    has_symtab = True
-                    break
-
-            info['is_stripped'] = not has_symtab
+            info['is_stripped'] = elffile.get_section_by_name('.symtab') is None
 
         return info
 
@@ -61,15 +63,108 @@ def get_elf_info_with_pyelftools(binary_path):
         return info
 
 
+def _parse_elf_header(header):
+    """
+    Parse ELF header bytes and return structured field values.
+
+    :param header: Raw bytes of ELF header (at least 64 bytes).
+    :return: Tuple of (ei_class, endian_char, e_phoff, e_shoff, e_phentsize, e_phnum, e_shnum, e_shstrndx, sh_entry_size)
+             or None if header is invalid.
+    """
+    if len(header) < 5 or header[:4] != ELF_MAGIC:
+        return None
+
+    ei_class = header[4]
+    ei_data = header[5]
+
+    if ei_class not in (ELFCLASS32, ELFCLASS64):
+        return None
+
+    endian_char = '<' if ei_data == 1 else '>'
+
+    if ei_class == ELFCLASS32:
+        e_phoff = struct.unpack(f'{endian_char}I', header[28:32])[0]
+        e_shoff = struct.unpack(f'{endian_char}I', header[32:36])[0]
+        e_phentsize = struct.unpack(f'{endian_char}H', header[42:44])[0]
+        e_phnum = struct.unpack(f'{endian_char}H', header[44:46])[0]
+        e_shnum = struct.unpack(f'{endian_char}H', header[48:50])[0]
+        e_shstrndx = struct.unpack(f'{endian_char}H', header[50:52])[0]
+        sh_entry_size = SH_ENTRY_SIZE_32
+    else:
+        e_phoff = struct.unpack(f'{endian_char}Q', header[32:40])[0]
+        e_shoff = struct.unpack(f'{endian_char}Q', header[40:48])[0]
+        e_phentsize = struct.unpack(f'{endian_char}H', header[54:56])[0]
+        e_phnum = struct.unpack(f'{endian_char}H', header[56:58])[0]
+        e_shnum = struct.unpack(f'{endian_char}H', header[60:62])[0]
+        e_shstrndx = struct.unpack(f'{endian_char}H', header[62:64])[0]
+        sh_entry_size = SH_ENTRY_SIZE_64
+
+    return (ei_class, endian_char, e_phoff, e_shoff, e_phentsize,
+            e_phnum, e_shnum, e_shstrndx, sh_entry_size)
+
+
+def _validate_section_names(f, ei_class, endian_char, e_shoff, e_shnum, e_shstrndx, sh_entry_size):
+    """
+    Validate whether the ELF file has a valid section name string table.
+
+    :return: True if valid section names exist, False otherwise.
+    """
+    if e_shnum == 0 or e_shstrndx == 0 or e_shstrndx >= e_shnum:
+        return False
+
+    try:
+        shstrtab_header_offset = e_shoff + (e_shstrndx * sh_entry_size)
+        f.seek(shstrtab_header_offset)
+        shstrtab_header = f.read(sh_entry_size)
+
+        if len(shstrtab_header) != sh_entry_size:
+            return False
+
+        # Parse sh_offset and sh_size from section header
+        if ei_class == ELFCLASS32:
+            sh_offset = struct.unpack(f'{endian_char}I', shstrtab_header[16:20])[0]
+            sh_size_val = struct.unpack(f'{endian_char}I', shstrtab_header[20:24])[0]
+        else:
+            sh_offset = struct.unpack(f'{endian_char}Q', shstrtab_header[24:32])[0]
+            sh_size_val = struct.unpack(f'{endian_char}Q', shstrtab_header[32:40])[0]
+
+        if sh_offset == 0 or sh_size_val == 0:
+            return False
+
+        file_size = f.seek(0, 2)
+        return sh_offset < file_size and sh_offset + sh_size_val <= file_size
+
+    except Exception:
+        return False
+
+
+def _count_load_segments(f, endian_char, e_phoff, e_phentsize, e_phnum):
+    """
+    Count the number of PT_LOAD segments in the ELF file.
+
+    :return: Number of PT_LOAD segments.
+    """
+    f.seek(e_phoff)
+    load_count = 0
+
+    for _ in range(e_phnum):
+        ph = f.read(e_phentsize)
+        if len(ph) < 4:
+            break
+        p_type = struct.unpack(f'{endian_char}I', ph[:4])[0]
+        if p_type == PT_LOAD:
+            load_count += 1
+
+    return load_count
+
+
 def get_elf_binary_info(binary_path):
     """
     Read ELF file once to get bits, load segments count, and section headers info.
-    This is more efficient than reading the file multiple times.
 
     :param binary_path: Path to the binary file
     :return: Dictionary with 'bits', 'load_segments', 'has_section_name' keys, or all None if error
     """
-    PT_LOAD = 1
     info = {
         'bits': None,
         'load_segments': None,
@@ -78,119 +173,24 @@ def get_elf_binary_info(binary_path):
 
     try:
         with open(binary_path, 'rb') as f:
-            # Read ELF header (up to 64 bytes)
             header = f.read(64)
 
-            if len(header) < 5:
+            parsed = _parse_elf_header(header)
+            if parsed is None:
                 return info
 
-            # Check ELF magic number
-            if header[:4] != b'\x7fELF':
-                return info
+            (ei_class, endian_char, e_phoff, e_shoff, e_phentsize,
+             e_phnum, e_shnum, e_shstrndx, sh_entry_size) = parsed
 
-            # Fifth byte is EI_CLASS (1=32-bit, 2=64-bit)
-            ei_class = header[4]
-            ei_data = header[5]  # 1=little endian, 2=big endian
+            info['bits'] = 32 if ei_class == ELFCLASS32 else 64
 
-            # Determine bits
-            if ei_class == 1:  # ELFCLASS32
-                info['bits'] = 32
-            elif ei_class == 2:  # ELFCLASS64
-                info['bits'] = 64
-            else:
-                return info
+            info['has_section_name'] = _validate_section_names(
+                f, ei_class, endian_char, e_shoff, e_shnum, e_shstrndx, sh_entry_size
+            )
 
-            # Determine endianness
-            is_little_endian = (ei_data == 1)
-            endian_char = '<' if is_little_endian else '>'
-
-            # Parse header based on 32-bit or 64-bit
-            if ei_class == 1:  # 32-bit ELF
-                # e_phoff at offset 28 (4 bytes)
-                # e_shoff at offset 32 (4 bytes)
-                # e_phentsize at offset 42 (2 bytes)
-                # e_phnum at offset 44 (2 bytes)
-                # e_shnum at offset 48 (2 bytes)
-                # e_shstrndx at offset 50 (2 bytes)
-                e_phoff = struct.unpack(f'{endian_char}I', header[28:32])[0]
-                e_shoff = struct.unpack(f'{endian_char}I', header[32:36])[0]
-                e_phentsize = struct.unpack(f'{endian_char}H', header[42:44])[0]
-                e_phnum = struct.unpack(f'{endian_char}H', header[44:46])[0]
-                e_shnum = struct.unpack(f'{endian_char}H', header[48:50])[0]
-                e_shstrndx = struct.unpack(f'{endian_char}H', header[50:52])[0]
-                sh_size = 40  # Section header size for 32-bit
-
-            elif ei_class == 2:  # 64-bit ELF
-                # e_phoff at offset 32 (8 bytes)
-                # e_shoff at offset 40 (8 bytes)
-                # e_phentsize at offset 54 (2 bytes)
-                # e_phnum at offset 56 (2 bytes)
-                # e_shnum at offset 60 (2 bytes)
-                # e_shstrndx at offset 62 (2 bytes)
-                e_phoff = struct.unpack(f'{endian_char}Q', header[32:40])[0]
-                e_shoff = struct.unpack(f'{endian_char}Q', header[40:48])[0]
-                e_phentsize = struct.unpack(f'{endian_char}H', header[54:56])[0]
-                e_phnum = struct.unpack(f'{endian_char}H', header[56:58])[0]
-                e_shnum = struct.unpack(f'{endian_char}H', header[60:62])[0]
-                e_shstrndx = struct.unpack(f'{endian_char}H', header[62:64])[0]
-                sh_size = 64  # Section header size for 64-bit
-
-            # Check if has section name string table
-            # Basic checks first
-            if e_shnum == 0 or e_shstrndx == 0 or e_shstrndx >= e_shnum:
-                info['has_section_name'] = False
-            else:
-                # Advanced check: verify the section header string table is valid
-                try:
-                    # Calculate offset of the shstrtab section header
-                    shstrtab_header_offset = e_shoff + (e_shstrndx * sh_size)
-                    f.seek(shstrtab_header_offset)
-                    shstrtab_header = f.read(sh_size)
-
-                    if len(shstrtab_header) == sh_size:
-                        # Parse section header to get sh_offset and sh_size
-                        if ei_class == 1:  # 32-bit
-                            sh_offset = struct.unpack(f'{endian_char}I', shstrtab_header[16:20])[0]
-                            sh_size_val = struct.unpack(f'{endian_char}I', shstrtab_header[20:24])[0]
-                        else:  # 64-bit
-                            sh_offset = struct.unpack(f'{endian_char}Q', shstrtab_header[24:32])[0]
-                            sh_size_val = struct.unpack(f'{endian_char}Q', shstrtab_header[32:40])[0]
-
-                        # Check if offset and size are reasonable
-                        if sh_offset > 0 and sh_size_val > 0:
-                            # Get file size
-                            current_pos = f.tell()
-                            file_size = f.seek(0, 2)
-                            f.seek(current_pos)
-
-                            # Verify string table is within file bounds
-                            if sh_offset < file_size and sh_offset + sh_size_val <= file_size:
-                                info['has_section_name'] = True
-                            else:
-                                info['has_section_name'] = False
-                        else:
-                            info['has_section_name'] = False
-                    else:
-                        info['has_section_name'] = False
-                except Exception:
-                    # If any error occurs during validation, assume no valid section names
-                    info['has_section_name'] = False
-
-            # Count PT_LOAD segments
-            f.seek(e_phoff)
-            load_count = 0
-
-            for _ in range(e_phnum):
-                ph = f.read(e_phentsize)
-                if len(ph) < 4:
-                    break
-
-                # p_type is the first 4 bytes of each program header
-                p_type = struct.unpack(f'{endian_char}I', ph[:4])[0]
-                if p_type == PT_LOAD:
-                    load_count += 1
-
-            info['load_segments'] = load_count
+            info['load_segments'] = _count_load_segments(
+                f, endian_char, e_phoff, e_phentsize, e_phnum
+            )
 
             return info
 
