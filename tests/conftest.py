@@ -3,15 +3,15 @@ Shared test fixtures for pyelflabeler tests.
 """
 
 import struct
-import tempfile
-import os
 import pytest
+
+from src.utils.elf_utils import ELFCLASS32, ELFCLASS64, SH_ENTRY_SIZE_32, SH_ENTRY_SIZE_64
 
 
 def _build_minimal_elf(bits=64, little_endian=True, num_loads=2, with_sections=True):
     """Build a minimal valid ELF binary for testing."""
     endian = '<' if little_endian else '>'
-    ei_class = 1 if bits == 32 else 2
+    ei_class = ELFCLASS32 if bits == 32 else ELFCLASS64
 
     # ELF magic + EI_CLASS + EI_DATA + EI_VERSION + padding
     e_ident = b'\x7fELF'
@@ -23,7 +23,7 @@ def _build_minimal_elf(bits=64, little_endian=True, num_loads=2, with_sections=T
     if bits == 32:
         ehdr_size = 52
         phdr_size = 32
-        shdr_size = 40
+        shdr_size = SH_ENTRY_SIZE_32
 
         # Build program headers (PT_LOAD entries)
         phdrs = b''
@@ -85,7 +85,7 @@ def _build_minimal_elf(bits=64, little_endian=True, num_loads=2, with_sections=T
     else:  # 64-bit
         ehdr_size = 64
         phdr_size = 56
-        shdr_size = 64
+        shdr_size = SH_ENTRY_SIZE_64
 
         phdrs = b''
         for i in range(num_loads):

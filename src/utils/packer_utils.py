@@ -68,39 +68,36 @@ def parse_diec_output(diec_output):
     return result
 
 
+_DIEC_DEFAULT = {
+    'diec_is_packed': False,
+    'diec_packer_info': None,
+    'diec_packing_method': None
+}
+
+
 def run_diec_analysis(binary_path):
     """
     Run diec analysis on a binary file to get packer information.
 
     :param binary_path: Path to the binary file.
-    :return: Tuple containing (is_packed, packer_info, packing_method)
-             Returns None for string fields if analysis fails.
+    :return: Dictionary with 'diec_is_packed', 'diec_packer_info', 'diec_packing_method' keys.
     """
     try:
-        # Execute diec -d command
         result = subprocess.run(['diec', '-d', binary_path],
                               capture_output=True, text=True, timeout=30)
 
         if result.returncode != 0:
             logging.debug(f"diec command failed with return code {result.returncode} for {binary_path}")
-            return False, None, None
+            return dict(_DIEC_DEFAULT)
 
-        # Use parse_diec_output to parse the results
-        parsed_result = parse_diec_output(result.stdout)
-
-        # Convert to the expected return format
-        is_packed = parsed_result.get('diec_is_packed', False)
-        packer_info = parsed_result.get('diec_packer_info', None)
-        packing_method = parsed_result.get('diec_packing_method', None)
-
-        return is_packed, packer_info, packing_method
+        return parse_diec_output(result.stdout)
 
     except subprocess.TimeoutExpired:
         logging.debug(f"Timeout while running diec on {binary_path}")
-        return False, None, None
+        return dict(_DIEC_DEFAULT)
     except Exception as e:
         logging.debug(f"Error running diec analysis on {binary_path}: {str(e)}")
-        return False, None, None
+        return dict(_DIEC_DEFAULT)
 
 
 def convert_to_one_line(json_file):

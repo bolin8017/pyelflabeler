@@ -202,3 +202,26 @@ def get_elf_binary_info(binary_path):
     except Exception as e:
         logging.debug(f"Error reading ELF binary info from {binary_path}: {e}")
         return info
+
+
+def enrich_result_with_binary_info(result, binary_path):
+    """
+    Run all binary analysis (pyelftools, diec, struct parsing) and populate result dict.
+
+    :param result: Dictionary to populate with analysis results.
+    :param binary_path: Path to the ELF binary file.
+    """
+    from src.utils.packer_utils import run_diec_analysis
+
+    elf_info = get_elf_info_with_pyelftools(binary_path)
+    result['CPU'] = elf_info['cpu']
+    result['endianness'] = elf_info['endianness']
+    result['file_type'] = elf_info['file_type']
+    result['is_stripped'] = elf_info['is_stripped']
+
+    result.update(run_diec_analysis(binary_path))
+
+    binary_info = get_elf_binary_info(binary_path)
+    result['bits'] = binary_info['bits']
+    result['load_segments'] = binary_info['load_segments']
+    result['has_section_name'] = binary_info['has_section_name']
