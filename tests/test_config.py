@@ -26,6 +26,11 @@ class TestConfig:
         assert config.mode == 'benignware'
         assert config.output_path == "benignware_info.csv"
 
+    def test_benignware_ignores_input_dir(self, tmp_path):
+        """Benignware mode should not use input_dir for default output path."""
+        config = Config(mode='benignware', input_dir=str(tmp_path), binary_dir=str(tmp_path))
+        assert config.output_path == "benignware_info.csv"
+
     def test_custom_output_path(self, tmp_path):
         config = Config(mode='benignware', binary_dir=str(tmp_path), output_path="custom.csv")
         assert config.output_path == "custom.csv"

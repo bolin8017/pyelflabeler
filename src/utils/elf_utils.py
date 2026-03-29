@@ -67,17 +67,22 @@ def _parse_elf_header(header):
     """
     Parse ELF header bytes and return structured field values.
 
-    :param header: Raw bytes of ELF header (at least 64 bytes).
+    :param header: Raw bytes of ELF header (at least 52 bytes for 32-bit, 64 bytes for 64-bit).
     :return: Tuple of (ei_class, endian_char, e_phoff, e_shoff, e_phentsize, e_phnum, e_shnum, e_shstrndx, sh_entry_size)
-             or None if header is invalid.
+             or None if header is invalid or too short.
     """
-    if len(header) < 5 or header[:4] != ELF_MAGIC:
+    if len(header) < 16 or header[:4] != ELF_MAGIC:
         return None
 
     ei_class = header[4]
     ei_data = header[5]
 
     if ei_class not in (ELFCLASS32, ELFCLASS64):
+        return None
+
+    # Validate minimum header size for the ELF class
+    min_size = 52 if ei_class == ELFCLASS32 else 64
+    if len(header) < min_size:
         return None
 
     endian_char = '<' if ei_data == 1 else '>'

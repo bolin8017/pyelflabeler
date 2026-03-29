@@ -36,13 +36,16 @@ class BaseAnalyzer(ABC):
         """
         pass
 
+    @staticmethod
     @abstractmethod
-    def process_single_file(self, file_path):
+    def process_single_file(file_path, *args):
         """
         Process a single file and extract information.
-        This method must be implemented by subclasses.
+        Must be implemented as a @staticmethod by subclasses for multiprocessing compatibility.
+        Additional arguments can be provided via _build_task_args().
 
         :param file_path: Path to the file to process.
+        :param args: Additional arguments provided by _build_task_args().
         :return: Dictionary containing extracted information, or None if processing failed.
         """
         pass

@@ -22,6 +22,16 @@ class TestParseElfHeader:
         header = b'\x7fELF\x03' + b'\x01' + b'\x00' * 58  # class=3 is invalid
         assert _parse_elf_header(header) is None
 
+    def test_truncated_32bit_header(self):
+        """A valid ELF magic + 32-bit class but too short for full header."""
+        header = b'\x7fELF\x01\x01' + b'\x00' * 20  # 26 bytes, need 52
+        assert _parse_elf_header(header) is None
+
+    def test_truncated_64bit_header(self):
+        """A valid ELF magic + 64-bit class but too short for full header."""
+        header = b'\x7fELF\x02\x01' + b'\x00' * 40  # 46 bytes, need 64
+        assert _parse_elf_header(header) is None
+
     def test_64bit_little_endian(self, elf64_path):
         with open(elf64_path, 'rb') as f:
             header = f.read(64)

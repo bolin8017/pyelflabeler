@@ -143,15 +143,8 @@ def get_family_using_avclass(json_file, one_line_data):
             ['avclass', '-f', tmp_file_path],
             check=True, text=True, capture_output=True, timeout=30
         )
-        if result.returncode == 0:
-            # Extract family name
-            output_parts = result.stdout.strip().split()
-            family = output_parts[1] if len(output_parts) > 1 else None
-        else:
-            logging.warning(f"AVClass execution failed for {json_file}: return code {result.returncode}")
-            if result.stderr:
-                logging.debug(f"  stderr: {result.stderr[:200]}")
-            family = None
+        output_parts = result.stdout.strip().split()
+        family = output_parts[1] if len(output_parts) > 1 else None
     except subprocess.CalledProcessError as e:
         logging.warning(f"AVClass command error for {json_file}: {e}")
         if e.stderr:
